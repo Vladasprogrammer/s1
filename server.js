@@ -1,18 +1,25 @@
 const express = require('express');
 const app = express();
-const bodyParser = require('body-parser');
+// const bodyParser = require('body-parser');
 const mysql = require('mysql');
+const cors = require('cors');
 
-const URL = 'http://localhost:3000/';
+const URL = 'http://localhost:3000';
 
-app.use(express.static('public'));
-app.use(bodyParser.json());
+app.use(cors(
+    {
+        origin: URL,
+    }
+));
+
+// app.use(bodyParser.json());
+app.use(express.json());
 
 const con = mysql.createConnection({
     host: 'localhost',
     user: 'root',
     password: '',
-    database: 'miskas'
+    database: 'planet_db'
 });
 
 con.connect(err => {
@@ -23,219 +30,117 @@ con.connect(err => {
     console.log('Prisijungimas prie DB buvo sėkmingas');
 });
 
+// READ
+app.get('/', (req, res) => {
 
-app.get('/klientai/:type', (req, res) => {
-
-    // SELECT *
-    // FROM Clients
-    // INNER JOIN Phones
-    // ON Clients.id = Phones.client_id;
-
-    let jt = '';
-
-    switch (req.params.type) {
-        case 'inner':
-            jt = 'INNER';
-            break;
-        case 'left':
-            jt = 'LEFT';
-            break;
-        case 'right':
-            jt = 'RIGHT';
-            break;
-        default:
-            jt = 'INNER';
-    }
-
-    const sql = `
-        SELECT c.id, name, p.id AS pid, number, client_id
-        FROM clients AS c
-        ${jt} JOIN phones AS p
-        ON c.id = p.client_id
-    `;
-
-    con.query(sql, (err, result) => {
-        if (err) {
-            console.log('Klaida gaunant duomenis iš DB');
-            res.status(400).json({ error: 'Klaida gaunant duomenis iš DB' });
-            return;
-        }
-        res.json(result);
-    });
-
-});
-
-
-
-
-app.get('/medziu-sarasas/:page', (req, res) => {
-
-    // SELECT column1, column2, ...
-    // FROM table_name;
-
-    // SELECT column1, column2, ...
-    // FROM table_name
-    // WHERE columnN LIKE pattern;
-
-    let sql;
-    let params;
-    const page = parseInt(req.params.page) || 1;
-    const perPage = 3;
-    const limit = (page - 1) * perPage;
-    const q = req.query.q || '';
-
-
-    if (!q) {
-        sql = `
-            SELECT id, name, height, type
-            FROM trees
-            -- WHERE type = 'Lapuotis' AND height > 10
-            -- ORDER BY type DESC, height
-            ORDER BY name
-            LIMIT ?, ?
+    setTimeout(_ => { // Simulate server delay
+        const sql = `
+        SELECT * 
+        FROM 
+        planets
+        ORDER BY id DESC
         `;
-        params = [limit, perPage];
-    } else {
-        sql = `
-            SELECT id, name, height, type
-            FROM trees
-            WHERE name LIKE ?
-            ORDER BY name
-            LIMIT ?, ?
-        `;
-        params = [`%${q}%`, limit, perPage];
-    }
-
-    con.query(sql, params, (err, result) => {
-        if (err) {
-            console.log('Klaida gaunant duomenis iš DB');
-            res.status(400).json({ error: 'Klaida gaunant duomenis iš DB' });
-            return;
-        }
-        res.json(result);
-    });
+        con.query(sql, (err, result) => {
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+            result = result.map(planet => ({ ...planet, satellites: JSON.parse(planet.satellites) }));
+            res.json(result);
+        });
+    }, 700);
 });
 
-app.get('/medziu-skaicius', (req, res) => {
 
-    // SELECT COUNT(column_name)
-    // FROM table_name;
 
-    let sql;
-    let params;
-    const q = req.query.q || '';
+// CREATE
+app.post('/', (req, res) => {
 
-    if (!q) {
-        sql = `
-        SELECT COUNT(id) AS total
-        FROM trees
-    `;
-        params = [];
-    } else {
-        sql = `
-        SELECT COUNT(id) AS total
-        FROM trees
-        WHERE name LIKE ?
-    `;
-        params = [`%${q}%`];
-    }
+    setTimeout(_ => { // Simulate server delay
+        const { name, size, color_hex, satellites } = req.body;
 
-    con.query(sql, params, (err, result) => {
-        if (err) {
-            console.log('Klaida gaunant duomenis iš DB');
-            res.status(400).json({ error: 'Klaida gaunant duomenis iš DB' });
+        if (!name) {
+            res.status(422).json({ error: 'Neteisingai įvestas planetos pavadinimas' });
             return;
         }
-        const perPage = 3;
-        const pages = Math.ceil(result[0].total / perPage);
-        res.json({ pages });
-    });
+
+        const sats = JSON.stringify(satellites);
+        const sql = `
+        INSERT INTO planets
+        (name, size, color_hex, satellites)
+        VALUES (?,?,?,?)`;
+        con.query(sql, [name, size, color_hex, sats], (err, result) => {
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+            const id = result.insertId;
+            res.json({ success: true, id });
+        });
+    }, 2000);
 });
 
-app.post('/sodinti-medi', (req, res) => {
 
-    const { name, height, type } = req.body;
+//UPDATE
 
-    // INSERT INTO table_name 
-    // (column1, column2, column3, ...)
-    // VALUES (value1, value2, value3, ...);
+app.put('/:id', (req, res) => {
+    
+    setTimeout(_ => { // Simulate server delay
+        const { name, size, color_hex, satellites } = req.body;
+        const id = req.params.id;
 
-    const sql = `
-        INSERT INTO trees 
-        (name, height, type)
-        VALUES ('${name}', ${height}, '${type}')
-    `;
-
-
-    con.query(sql, (err, result) => {
-        if (err) {
-            console.log('Klaida įrašant duomenis į DB', err);
-            res.status(400).json({ error: 'Klaida įrašant duomenis į DB' });
+        if (!name) {
+            res.status(422).json({ error: 'Neteisingai įvestas planetos pavadinimas' });
             return;
         }
-        res.json({ success: 'Medis sėkmingai įrašytas į DB', result });
-    });
 
+        const sats = JSON.stringify(satellites);
+        const sql = `
+        UPDATE planets
+        SET name = ?, size = ?, color_hex = ?, satellites = ?
+        WHERE id = ?`;
+        con.query(sql, [name, size, color_hex, sats, id], (err, result) => {
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+            res.json({ success: true });
+        });
+    }, 2000);
 });
 
-app.delete('/iskasti-medi/:id', (req, res) => {
+// DELETE
+app.delete('/:id', (req, res) => {
+    
+    setTimeout(_ => { // Simulate server delay
 
-    const id = req.params.id;
+        const id = req.params.id;
 
-    // DELETE FROM table_name 
-    // WHERE condition;
-
-    // const sql = `
-    //     DELETE FROM trees
-    //     WHERE id = ${id}
-    // `;
-
-    const sql = `
-        DELETE FROM trees
-        WHERE id = ?
-    `;
-
-    con.query(sql, [id], (err, result) => {
-        if (err) {
-            console.log('Klaida trinant duomenis iš DB', err);
-            res.status(400).json({ error: 'Klaida trinant duomenis iš DB' });
+        if (parseInt(id) === 8) {
+            res.status(422).json({ error: 'Planeta yra nesunaikinama!' });
             return;
         }
-        res.json({ success: 'Medis sėkmingai iškastas iš DB', result });
-    });
 
+
+        const sql = `
+        DELETE FROM planets
+        WHERE id = ?`;
+        con.query(sql, [id], (err, result) => {
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+            res.json({ success: true });
+        });
+    }, 2000);
 });
 
-app.put('/persodinti-medi/:id', (req, res) => {
-
-    // UPDATE table_name
-    // SET column1 = value1, column2 = value2, ...
-    // WHERE condition;
-
-    const id = req.params.id;
-    const { name, height, type } = req.body;
-
-    const sql = `
-        UPDATE trees
-        SET name = ?, height = ?, type = ?
-        WHERE id = ?
-    `;
-
-    con.query(sql, [name, height, type, id], (err, result) => {
-        if (err) {
-            console.log('Klaida atnaujinant duomenis DB', err);
-            res.status(400).json({ error: 'Klaida atnaujinant duomenis DB' });
-            return;
-        }
-        res.json({ success: 'Medis sėkmingai persodintas DB', result });
-    });
-});
 
 
 
 // Start server
 
-const port = 3000;
+const port = 3333;
 app.listen(port, () => {
     console.log(`Serveris pasiruošęs ir laukia ant ${port} porto!`);
 });
